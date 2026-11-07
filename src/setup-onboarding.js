@@ -19,14 +19,16 @@ const ob = await obRes.json();
 console.log('Поточний Onboarding: питань', ob.prompts?.length, '· каналів за замовчуванням', ob.default_channel_ids?.length, '· увімкнено', ob.enabled);
 for (const p of ob.prompts || []) console.log(' -', p.title, `(${p.options?.length} відповідей)`);
 
+let seq = 0n;
+const sf = () => String(((BigInt(Date.now()) - 1420070400000n) << 22n) + (seq++));
 const mkOptions = (names, where) => names.filter((n) => roleId.has(`🔔 ${n}`)).map((n) => ({
-  title: n.slice(0, 50), description: where, role_ids: [roleId.get(`🔔 ${n}`)], channel_ids: [], emoji_name: '🔔',
+  id: sf(), title: n.slice(0, 50), description: where, role_ids: [roleId.get(`🔔 ${n}`)], channel_ids: [], emoji_name: '🔔',
 }));
 const TITLE_W = '🌲 Світові боси (Verteron): за ким стежити?';
 const TITLE_A = '🌀 Abyss-боси (Chaotic Lower Reshanta): за ким стежити?';
 const world = mkOptions(Object.values(NAMES), 'Світовий бос · Verteron');
 const abyss = mkOptions(active(CATEGORIES.abyss).map((b) => b.name), 'Abyss · Chaotic Lower Reshanta');
-const mk = (title, options) => ({ type: 0, title, single_select: false, required: false, in_onboarding: true, options });
+const mk = (title, options) => ({ id: sf(), type: 0, title, single_select: false, required: false, in_onboarding: true, options });
 const keep = (ob.prompts || []).filter((p) => p.title !== TITLE_W && p.title !== TITLE_A)
   .map((p) => ({ ...p, options: p.options.map((o) => ({ ...o, emoji_name: o.emoji?.name ?? o.emoji_name, emoji_id: o.emoji?.id ?? o.emoji_id })) }));
 const prompts = [...keep, mk(TITLE_W, world), mk(TITLE_A, abyss)];
