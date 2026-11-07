@@ -24,7 +24,7 @@ console.log('Канал', ch.id);
 const world = Object.values(NAMES);
 const abyss = active(CATEGORIES.abyss).map((b) => b.name);
 const groups = [
-  ['🎉 **Події**', ['Shugo Festival'], ['🎉']],
+  ['🏰 **Artifact Siege** (чт/сб 21:00)', ['Artifact Siege'], ['🏰']],
 ];
 for (const [title, names, em = EMOJI] of groups) {
   const lines = names.map((n, i) => `${em[i]} — ${n}`).join('\n');
