@@ -18,7 +18,7 @@ async function call(method, path, body) {
 }
 const EMOJI = ['🐺','🦅','🐻','🦂','🐍','🦇','🕷️','🐗','🦎','🐙','🦈','🐲','🔥','💀','⚔️','🛡️','🏹','🔮','👑','🌑','⭐','🌊','🍀','🪓'];
 const me = await call('GET', '/users/@me');
-const BOT_ALLOW = String(1024n | 2048n | 64n | 65536n | 8192n);
+const BOT_ALLOW = String(1024n | 2048n | 64n | 65536n);
 const chans = await call('GET', `/guilds/${guild}/channels`);
 const notif = chans.find((c) => c.name === 'сповіщення');
 const old = chans.find((c) => c.name === 'вибір-босів');
