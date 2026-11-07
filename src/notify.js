@@ -6,11 +6,13 @@ import path from 'node:path';
 import { DateTime } from 'luxon';
 import { CATEGORIES } from './bosses.js';
 import { active, spawnsBetween } from './schedule.js';
+import { EVENTS, nextOccurrences } from './events.js';
 import { NAMES } from './world-bosses.js';
-import { PAIRS, RIFT_MAP_ID, OUR_MAP_ID, MIN_GAP_MIN, WINDOW_MIN, riftRoleName } from './rift-bosses.js';
+import { PAIRS, RIFT_MAP_ID, OUR_MAP_ID, MIN_GAP_MIN, WINDOW_MIN } from './rift-bosses.js';
 
 const env = process.env;
 const RIFT_HOURS = [2, 5, 8, 11, 14, 17, 20, 23];
+const SHUGO = 'Shugo Festival';
 const RIFT_LEAD_MIN = Number(env.RIFT_LEAD_MIN || 15);
 const TZ = env.SERVER_TZ || 'Europe/Warsaw';
 const DRY = env.DRY_RUN === '1';
@@ -34,6 +36,12 @@ async function dueBosses() {
   // Abyss (за розкладом), включно з Watcher Kaira
   for (const boss of active(CATEGORIES.abyss)) {
     for (const t of spawnsBetween(boss, from, to, TZ)) out.push({ key: `${boss.id}|${t.toMillis()}`, name: boss.name, time: t.toMillis(), where: boss.zone });
+  }
+  // Shugo Festival (щогодини) — окрема роль
+  const shugo = EVENTS.find((e) => e.id === 'shugo');
+  for (const t of nextOccurrences(shugo, from.minus({ minutes: 1 }), TZ, 3)) {
+    if (t > to) break;
+    out.push({ key: `shugo|${t.toMillis()}`, name: SHUGO, time: t.toMillis(), where: 'Verteron / Altgard', shugo: true });
   }
   // світові боси Verteron (NotMeter)
   try {
@@ -78,14 +86,14 @@ function riftOpportunities(srv) {
     if (nowMs < open - RIFT_LEAD_MIN * 60000 || nowMs > r.targetAt) continue;
     const t = Math.floor(r.targetAt / 60000) * 60000;
     const oursT = Math.floor(o.targetAt / 60000) * 60000;
-    out.push({ key: `rift${p.rift}|${t}`, name: p.name, role: riftRoleName(p), time: t, where: `ріфт (Altgard) → потім у нас о <t:${sec(oursT)}:t> (<t:${sec(oursT)}:R>)`, rift: true });
+    out.push({ key: `rift${p.rift}|${t}`, name: p.name, time: t, where: `у ріфті (Altgard) о <t:${sec(t)}:t>, а в нашому світі (Verteron) о <t:${sec(oursT)}:t> (<t:${sec(oursT)}:R>)`, rift: true });
   }
   return out;
 }
 
 /** Усі імена босів, для яких мають існувати ролі. */
 export const allBossNames = () => [...new Set([...active(CATEGORIES.abyss).map((b) => b.name), ...Object.values(NAMES)])];
-export const allRoleNames = () => [...allBossNames().map(roleName), ...PAIRS.map(riftRoleName)];
+export const allRoleNames = () => [...allBossNames().map(roleName), roleName(SHUGO)];
 
 async function discord(method, url, body) {
   const r = await fetch(`${API}${url}`, {
@@ -139,13 +147,13 @@ async function main() {
 
   // боси з однаковим часом — в одне повідомлення
   const groups = new Map();
-  for (const b of due) { if (!groups.has(b.time)) groups.set(b.time, []); groups.get(b.time).push(b); }
-  for (const [time, list] of groups) {
-    const s = sec(time);
+  for (const b of due) { const gk = b.rift ? `r${b.key}` : b.time; if (!groups.has(gk)) groups.set(gk, []); groups.get(gk).push(b); }
+  for (const [, list] of groups) {
+    const s = sec(list[0].time);
     const pings = list.map((b) => roles.get(b.role || roleName(b.name))).filter(Boolean);
     const names = list.map((b) => `**${b.name}**`).join(', ');
-    const head = list[0].rift ? '🌀 Ріфт: вбий спершу там!' : '🔔';
-    const content = `${pings.map((id) => `<@&${id}>`).join(' ')}\n${head} ${names} — <t:${s}:R> (<t:${s}:t>) · ${list[0].where}`.trim();
+    const head = list[0].rift ? '🌀 Можна встигнути вбити і в ріфті, і в нашому світі:' : list[0].shugo ? '🎉' : '🔔';
+    const content = list[0].rift ? `${pings.map((id) => `<@&${id}>`).join(' ')}\n${head} ${names} — ${list[0].where}` : `${pings.map((id) => `<@&${id}>`).join(' ')}\n${head} ${names} — <t:${s}:R> (<t:${s}:t>) · ${list[0].where}`.trim();
     const body = { content, allowed_mentions: { roles: pings } };
     if (DRY) console.log('[DRY]', JSON.stringify(body));
     else {

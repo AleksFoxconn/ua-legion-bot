@@ -16,11 +16,13 @@ export const WINDOW_MIN = Number(env.RIFT_WINDOW_MIN || 60); // скільки �
 
 /** Пари босів: { rift: bossCode у ріфт-мапі, ours: bossCode у нашій мапі, name?: 'для логів' } */
 export const PAIRS = [
-  // Підтверджено: Eternal Gartua (Verteron, 2101074) ↔ Immortal Gartua (Altgard, 2400800), однакові таймери.
-  // Silent Dartan / Soul Ruler Kashapa / High Commander Lagta теж мають копії в Altgard, але їхні коди в NotMeter не підтверджені.
-  { rift: 2400800, ours: 2101074, name: 'Gartua' },
+  // Підтверджено: Eternal Gartua (Verteron, 2101074) ↔ Immortal Gartua (Altgard, 2400800).
+  { rift: 2400800, ours: 2101074, name: 'Eternal Gartua' },
+  // УВАГА: коди Altgard нижче зіставлені за порядком (2400853–855 ↔ Dartan < Kashapa < Lagta), не підтверджені.
+  { rift: 2400853, ours: 2101120, name: 'Silent Dartan', unverified: true },
+  { rift: 2400854, ours: 2101122, name: 'Soul Ruler Kashapa', unverified: true },
+  { rift: 2400855, ours: 2101131, name: 'High Commander Lagta', unverified: true },
 ];
-export const riftRoleName = (p) => `🔔 Rift: ${p.name}`;
 
 const mapEntries = (data, mapId) => {
   const srv = (data?.servers || []).find((s) => s.serverId === SERVER_ID);

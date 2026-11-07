@@ -17,31 +17,18 @@ async function call(method, path, body) {
   throw new Error('429 повтори вичерпано');
 }
 const EMOJI = ['🐺','🦅','🐻','🦂','🐍','🦇','🕷️','🐗','🦎','🐙','🦈','🐲','🔥','💀','⚔️','🛡️','🏹','🔮','👑','🌑','⭐','🌊','🍀','🪓'];
-const me = await call('GET', '/users/@me');
-const BOT_ALLOW = String(1024n | 2048n | 64n | 65536n);
 const chans = await call('GET', `/guilds/${guild}/channels`);
-const notif = chans.find((c) => c.name === 'сповіщення');
-const old = chans.find((c) => c.name === 'вибір-босів');
-if (old) { await call('DELETE', `/channels/${old.id}`); console.log('Старий канал видалено'); }
-const overwrites = (notif?.permission_overwrites ?? []).filter((o) => o.id !== me.id)
-  .map((o) => ({ id: o.id, type: o.type, allow: o.allow, deny: o.deny }));
-overwrites.push({ id: me.id, type: 1, allow: BOT_ALLOW, deny: '0' });
-const ch = await call('POST', `/guilds/${guild}/channels`, {
-  name: 'вибір-босів', type: 0, parent_id: notif?.parent_id ?? undefined,
-  topic: 'Постав реакцію — отримаєш роль і пінг за кілька хвилин до появи боса. Зняв реакцію — пінги вимкнено.',
-  permission_overwrites: overwrites,
-});
+const ch = chans.find((c) => c.name === 'вибір-босів');
+if (!ch) throw new Error('Канал #вибір-босів не знайдено');
 console.log('Канал', ch.id);
 const world = Object.values(NAMES);
 const abyss = active(CATEGORIES.abyss).map((b) => b.name);
 const groups = [
-  ['🌲 **Світові боси (Verteron) · 1/2**', world.slice(0, 12)],
-  ['🌲 **Світові боси (Verteron) · 2/2**', world.slice(12)],
-  ['🌀 **Abyss-боси**', abyss],
+  ['🎉 **Події**', ['Shugo Festival'], ['🎉']],
 ];
-for (const [title, names] of groups) {
-  const lines = names.map((n, i) => `${EMOJI[i]} — ${n}`).join('\n');
+for (const [title, names, em = EMOJI] of groups) {
+  const lines = names.map((n, i) => `${em[i]} — ${n}`).join('\n');
   const msg = await call('POST', `/channels/${ch.id}/messages`, { content: `${title}\nПостав реакцію, щоб отримувати пінги по цьому босу:\n\n${lines}` });
-  for (let i = 0; i < names.length; i++) { await call('PUT', `/channels/${ch.id}/messages/${msg.id}/reactions/${encodeURIComponent(EMOJI[i])}/@me`); await sleep(350); }
-  console.log('MSG', msg.id, '|', names.map((n, i) => `${EMOJI[i]}=${n}`).join('; '));
+  for (let i = 0; i < names.length; i++) { await call('PUT', `/channels/${ch.id}/messages/${msg.id}/reactions/${encodeURIComponent(em[i])}/@me`); await sleep(350); }
+  console.log('MSG', msg.id, '|', names.map((n, i) => `${em[i]}=${n}`).join('; '));
 }
