@@ -17,19 +17,21 @@ async function call(method, path, body) {
   throw new Error('429 повтори вичерпано');
 }
 const EMOJI = ['🐺','🦅','🐻','🦂','🐍','🦇','🕷️','🐗','🦎','🐙','🦈','🐲','🔥','💀','⚔️','🛡️','🏹','🔮','👑','🌑','⭐','🌊','🍀','🪓'];
+const me = await call('GET', '/users/@me');
+const BOT_ALLOW = String(1024n | 2048n | 64n | 65536n | 8192n);
 const chans = await call('GET', `/guilds/${guild}/channels`);
 const notif = chans.find((c) => c.name === 'сповіщення');
-let ch = chans.find((c) => c.name === 'вибір-босів');
-if (!ch) ch = await call('POST', `/guilds/${guild}/channels`, {
+const old = chans.find((c) => c.name === 'вибір-босів');
+if (old) { await call('DELETE', `/channels/${old.id}`); console.log('Старий канал видалено'); }
+const overwrites = (notif?.permission_overwrites ?? []).filter((o) => o.id !== me.id)
+  .map((o) => ({ id: o.id, type: o.type, allow: o.allow, deny: o.deny }));
+overwrites.push({ id: me.id, type: 1, allow: BOT_ALLOW, deny: '0' });
+const ch = await call('POST', `/guilds/${guild}/channels`, {
   name: 'вибір-босів', type: 0, parent_id: notif?.parent_id ?? undefined,
   topic: 'Постав реакцію — отримаєш роль і пінг за кілька хвилин до появи боса. Зняв реакцію — пінги вимкнено.',
-  permission_overwrites: notif?.permission_overwrites ?? [],
+  permission_overwrites: overwrites,
 });
 console.log('Канал', ch.id);
-const me = await call('GET', '/users/@me');
-const ow = (ch.permission_overwrites || []).filter((o) => o.id !== me.id);
-ow.push({ id: me.id, type: 1, allow: String(1024n | 2048n | 64n | 65536n), deny: '0' });
-await call('PUT', `/channels/${ch.id}/permissions/${me.id}`, { type: 1, allow: String(1024n | 2048n | 64n | 65536n), deny: '0' });
 const world = Object.values(NAMES);
 const abyss = active(CATEGORIES.abyss).map((b) => b.name);
 const groups = [
