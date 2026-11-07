@@ -87,6 +87,8 @@ async function updateBoard(data) {
 }
 
 // скільки найближчих подій кожного типу тримаємо в Discord (за замовчуванням 1)
+// подія «світиться» лише SHOW_MIN хв після початку, потім Discord сам завершує її
+const SHOW_MIN = Number(env.EVENT_SHOW_MIN || 2);
 const QUOTA = { rift: 2, abyss: 2 };
 const CATEGORY = CATEGORIES.abyss;
 
@@ -180,12 +182,28 @@ async function syncEvents(data) {
   }
 
   const have = new Set(existing.map((e) => key(e.name, Date.parse(e.scheduled_start_time))));
+  // вирівнюємо тривалість уже створених подій (щоб теж закінчувались через SHOW_MIN хв)
+  for (const e of existing) {
+    const start = Date.parse(e.scheduled_start_time);
+    if (!wantedKeys.has(key(e.name, start)) || start < nowMs) continue;
+    const wantEnd = start + SHOW_MIN * 60000;
+    if (e.scheduled_end_time && Date.parse(e.scheduled_end_time) === wantEnd) continue;
+    if (DRY) { console.log('[DRY] скоротив би', e.name); continue; }
+    let u = await call(`${API}/guilds/${guild}/scheduled-events/${e.id}`, { method: 'PATCH', headers, body: JSON.stringify({ scheduled_end_time: new Date(wantEnd).toISOString() }) });
+    if (u.status === 429) {
+      const wait = Math.min(((await u.json().catch(() => ({}))).retry_after || 5) + 1, 30);
+      await sleep(wait * 1000);
+      u = await call(`${API}/guilds/${guild}/scheduled-events/${e.id}`, { method: 'PATCH', headers, body: JSON.stringify({ scheduled_end_time: new Date(wantEnd).toISOString() }) });
+    }
+    console.log(u.ok ? 'Скорочено:' : `Не скорочено (${u.status}):`, e.name);
+    await sleep(1200);
+  }
   for (const c of wanted) {
     if (have.has(key(c.name, c.time.toMillis()))) continue;
     const body = JSON.stringify({
       name: c.name,
       scheduled_start_time: c.time.toUTC().toISO(),
-      scheduled_end_time: c.time.plus({ minutes: c.minutes }).toUTC().toISO(),
+      scheduled_end_time: c.time.plus({ minutes: SHOW_MIN }).toUTC().toISO(),
       privacy_level: 2,
       entity_type: 3,
       entity_metadata: { location: c.location },
