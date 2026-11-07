@@ -24,14 +24,15 @@ const sf = () => String(((BigInt(Date.now()) - 1420070400000n) << 22n) + (seq++)
 const mkOptions = (names, where) => names.filter((n) => roleId.has(`🔔 ${n}`)).map((n) => ({
   id: sf(), title: n.slice(0, 50), description: where, role_ids: [roleId.get(`🔔 ${n}`)], channel_ids: [], emoji_name: '🔔',
 }));
-const TITLE_W = '🌲 Світові боси (Verteron): за ким стежити?';
+const TITLE_W = '🌲 Світові боси (Verteron) · 1/2: за ким стежити?';
+const TITLE_W2 = '🌲 Світові боси (Verteron) · 2/2: за ким стежити?';
 const TITLE_A = '🌀 Abyss-боси (Chaotic Lower Reshanta): за ким стежити?';
 const world = mkOptions(Object.values(NAMES), 'Світовий бос · Verteron');
 const abyss = mkOptions(active(CATEGORIES.abyss).map((b) => b.name), 'Abyss · Chaotic Lower Reshanta');
 const mk = (title, options) => ({ id: sf(), type: 0, title, single_select: false, required: false, in_onboarding: true, options });
-const keep = (ob.prompts || []).filter((p) => p.title !== TITLE_W && p.title !== TITLE_A)
+const keep = (ob.prompts || []).filter((p) => p.title !== TITLE_W && p.title !== TITLE_W2 && p.title !== TITLE_A)
   .map((p) => ({ ...p, options: p.options.map((o) => ({ ...o, emoji_name: o.emoji?.name ?? o.emoji_name, emoji_id: o.emoji?.id ?? o.emoji_id })) }));
-const prompts = [...keep, mk(TITLE_W, world), mk(TITLE_A, abyss)];
+const prompts = [...keep, mk(TITLE_W, world.slice(0, 12)), mk(TITLE_W2, world.slice(12)), mk(TITLE_A, abyss)];
 console.log(`Буде: ${keep.length} наявних + світові (${world.length}) + Abyss (${abyss.length})`);
 
 if (APPLY !== '1') { console.log('Пробний режим, нічого не змінено (APPLY=1 для застосування)'); process.exit(0); }
