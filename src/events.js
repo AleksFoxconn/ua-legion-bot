@@ -28,12 +28,7 @@ export const EVENTS = [
     note: 'пн/чт/сб, 5 хв підготовки + 15 хв матч (за корейським патчем; на Global не підтверджено)',
   },
   {
-    id: 'rift-zone', discordEvent: true, name: 'Abyss Rift Zone', emoji: '🩸', show: 1, windowMin: 30,
-    weekdays: [2, 4], hours: [22], minute: 0,
-    note: 'вт/чт, черга на поле бою Abyss (не підтверджено)',
-  },
-  {
-    id: 'arena', discordEvent: true, name: 'Arena of Tactics (10v10)', emoji: '🏟️', show: 2, windowMin: 180,
+    id: 'arena', discordEvent: true, name: 'Battlefield (10v10)', emoji: '🏟️', show: 2, windowMin: 180,
     hours: [11, 19], minute: 0,
     note: 'щодня 11:00–14:00 та 19:00–21:00 (за metabot/allthings; перший слот 3 год, другий 2 год)',
   },
