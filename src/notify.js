@@ -13,6 +13,7 @@ import { PAIRS, RIFT_MAP_ID, OUR_MAP_ID, MIN_GAP_MIN, MAX_GAP_MIN, WINDOW_MIN } 
 const env = process.env;
 const RIFT_HOURS = [2, 5, 8, 11, 14, 17, 20, 23];
 const SHUGO = 'Shugo Festival';
+const SIEGE_ROLE = env.SIEGE_ROLE || 'Soldier'; // на Artifact Siege пінгуємо всіх з цією роллю
 const RIFT_LEAD_MIN = Number(env.RIFT_LEAD_MIN || 15);
 const TZ = env.SERVER_TZ || 'Europe/Warsaw';
 const DRY = env.DRY_RUN === '1';
@@ -42,7 +43,7 @@ async function dueBosses() {
     const ev = EVENTS.find((e) => e.id === id);
     for (const t of nextOccurrences(ev, from.minus({ minutes: 1 }), TZ, 3)) {
       if (t > to) break;
-      out.push({ key: `${id}|${t.toMillis()}`, name: ev.name, time: t.toMillis(), where, shugo: true, emoji: ev.emoji });
+      out.push({ key: `${id}|${t.toMillis()}`, name: ev.name, time: t.toMillis(), where, shugo: true, emoji: ev.emoji, ...(id === 'siege' ? { role: SIEGE_ROLE } : {}) });
     }
   }
   // світові боси Verteron (NotMeter)
@@ -95,7 +96,7 @@ function riftOpportunities(srv) {
 
 /** Усі імена босів, для яких мають існувати ролі. */
 export const allBossNames = () => [...new Set([...active(CATEGORIES.abyss).map((b) => b.name), ...Object.values(NAMES)])];
-export const allRoleNames = () => [...allBossNames().map(roleName), roleName(SHUGO), roleName('Artifact Siege')];
+export const allRoleNames = () => [...allBossNames().map(roleName), roleName(SHUGO)];
 
 async function discord(method, url, body) {
   const r = await fetch(`${API}${url}`, {

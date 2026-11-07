@@ -30,7 +30,7 @@ const TITLE_A = '🌀 Abyss-боси (Chaotic Lower Reshanta): за ким ст�
 const world = mkOptions(Object.values(NAMES), 'Світовий бос · Verteron');
 const abyss = mkOptions(active(CATEGORIES.abyss).map((b) => b.name), 'Abyss · Chaotic Lower Reshanta');
 const TITLE_E = '🎉 Події: за чим стежити?';
-const eventOpts = ['Shugo Festival', 'Artifact Siege'].filter((n) => roleId.has(`🔔 ${n}`)).map((n) => ({ id: sf(), title: n, description: n === 'Shugo Festival' ? 'Щогодини, Verteron/Altgard' : 'Чт/сб 21:00, Chaotic Lower Reshanta', role_ids: [roleId.get(`🔔 ${n}`)], channel_ids: [], emoji_name: n === 'Shugo Festival' ? '🎉' : '🏰' }));
+const eventOpts = ['Shugo Festival'].filter((n) => roleId.has(`🔔 ${n}`)).map((n) => ({ id: sf(), title: n, description: n === 'Shugo Festival' ? 'Щогодини, Verteron/Altgard' : 'Чт/сб 21:00, Chaotic Lower Reshanta', role_ids: [roleId.get(`🔔 ${n}`)], channel_ids: [], emoji_name: n === 'Shugo Festival' ? '🎉' : '🏰' }));
 const mk = (title, options) => ({ id: sf(), type: 0, title, single_select: false, required: false, in_onboarding: true, options });
 const keep = (ob.prompts || []).filter((p) => p.title !== TITLE_W && p.title !== TITLE_W2 && p.title !== TITLE_E && p.title !== TITLE_A)
   .map((p) => ({ ...p, options: p.options.map((o) => ({ ...o, emoji_name: o.emoji?.name ?? o.emoji_name, emoji_id: o.emoji?.id ?? o.emoji_id })) }));
