@@ -18,8 +18,8 @@ async function call(method, path, body) {
 }
 const EMOJI = ['🐺','🦅','🐻','🦂','🐍','🦇','🕷️','🐗','🦎','🐙','🦈','🐲','🔥','💀','⚔️','🛡️','🏹','🔮','👑','🌑','⭐','🌊','🍀','🪓'];
 const chans = await call('GET', `/guilds/${guild}/channels`);
-const ch = chans.find((c) => c.name === 'вибір-босів');
-if (!ch) throw new Error('Канал #вибір-босів не знайдено');
+const ch = chans.find((c) => c.name === 'вибір-сповіщень');
+if (!ch) throw new Error('Канал #вибір-сповіщень не знайдено');
 console.log('Канал', ch.id);
 const world = Object.values(NAMES);
 const abyss = active(CATEGORIES.abyss).map((b) => b.name);
