@@ -130,6 +130,20 @@ async function ensureRoles(names, create) {
   return map;
 }
 
+/** Видаляє повідомлення, час появи яких уже настав. */
+async function cleanup(st, url) {
+  st.msgs = st.msgs || [];
+  const keep = [];
+  for (const m of st.msgs) {
+    if (m.time > nowMs) { keep.push(m); continue; }
+    if (DRY) { console.log('[DRY] видалив би повідомлення', m.id); continue; }
+    const r = await fetch(`${url}/messages/${m.id}`, { method: 'DELETE' });
+    if (r.ok || r.status === 404) console.log('Видалено повідомлення', m.id);
+    else { console.warn('Не видалено', m.id, r.status); if (nowMs - m.time < 3600e3) keep.push(m); }
+  }
+  st.msgs = keep;
+}
+
 function loadState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return { sent: {} }; } }
 function saveState(st) {
   for (const k of Object.keys(st.sent)) if (st.sent[k] < nowMs - 6 * 3600e3) delete st.sent[k];
@@ -142,8 +156,9 @@ async function main() {
   if (!url && !DRY) return console.log('Немає NOTIFY_WEBHOOK_URL: сповіщення пропущено');
   const roles = await ensureRoles(allRoleNames(), env.ENSURE_ROLES !== '0');
   const st = loadState();
+  if (url) await cleanup(st, url);
   const due = (await dueBosses()).filter((b) => !st.sent[b.key]);
-  if (!due.length) return console.log('Нових сповіщень немає');
+  if (!due.length) { saveState(st); return console.log('Нових сповіщень немає'); }
 
   // боси з однаковим часом — в одне повідомлення
   const groups = new Map();
@@ -157,8 +172,9 @@ async function main() {
     const body = { content, allowed_mentions: { roles: pings } };
     if (DRY) console.log('[DRY]', JSON.stringify(body));
     else {
-      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const r = await fetch(`${url}${url.includes('?') ? '&' : '?'}wait=true`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!r.ok) { console.warn('Вебхук:', r.status, await r.text()); continue; }
+      try { st.msgs.push({ id: (await r.json()).id, time: list[0].time }); } catch {}
     }
     for (const b of list) st.sent[b.key] = nowMs;
     console.log('Сповіщення:', names);
