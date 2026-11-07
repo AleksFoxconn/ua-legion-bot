@@ -11,7 +11,8 @@ const env = process.env;
 export const SERVER_ID = Number(env.SERVER_ID || 1315); // Kasaka (EU)
 export const OUR_MAP_ID = Number(env.OUR_MAP_ID || 1010); // Verteron
 export const RIFT_MAP_ID = Number(env.RIFT_MAP_ID || 1110); // припущення, див. TODO
-export const MIN_GAP_MIN = Number(env.RIFT_MIN_GAP_MIN || 10);
+export const MIN_GAP_MIN = Number(env.RIFT_MIN_GAP_MIN || 5);
+export const MAX_GAP_MIN = Number(env.RIFT_MAX_GAP_MIN || 30); // якщо різниця більша — встигнути обох не вийде, мовчимо
 export const WINDOW_MIN = Number(env.RIFT_WINDOW_MIN || 60); // скільки триває перебування у ріфт-світі
 
 /** Пари босів: { rift: bossCode у ріфт-мапі, ours: bossCode у нашій мапі, name?: 'для логів' } */

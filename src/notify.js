@@ -8,7 +8,7 @@ import { CATEGORIES } from './bosses.js';
 import { active, spawnsBetween } from './schedule.js';
 import { EVENTS, nextOccurrences } from './events.js';
 import { NAMES } from './world-bosses.js';
-import { PAIRS, RIFT_MAP_ID, OUR_MAP_ID, MIN_GAP_MIN, WINDOW_MIN } from './rift-bosses.js';
+import { PAIRS, RIFT_MAP_ID, OUR_MAP_ID, MIN_GAP_MIN, MAX_GAP_MIN, WINDOW_MIN } from './rift-bosses.js';
 
 const env = process.env;
 const RIFT_HOURS = [2, 5, 8, 11, 14, 17, 20, 23];
@@ -76,7 +76,7 @@ function riftOpportunities(srv) {
     const o = ours.find((e) => e.bossCode === p.ours);
     if (!r || !o || r.spawned || o.spawned) continue;
     const gap = (o.targetAt - r.targetAt) / 60000;
-    if (gap <= MIN_GAP_MIN) continue;
+    if (gap <= MIN_GAP_MIN || gap >= MAX_GAP_MIN) continue; // пишемо лише коли різниця 5–30 хв
     // ріфт, у вікно якого потрапляє поява
     let open = null;
     const base = DateTime.fromMillis(r.targetAt, { zone: TZ }).startOf('day');
