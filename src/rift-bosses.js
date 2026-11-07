@@ -11,11 +11,16 @@ const env = process.env;
 export const SERVER_ID = Number(env.SERVER_ID || 1315); // Kasaka (EU)
 export const OUR_MAP_ID = Number(env.OUR_MAP_ID || 1010); // Verteron
 export const RIFT_MAP_ID = Number(env.RIFT_MAP_ID || 1110); // припущення, див. TODO
-export const MIN_GAP_MIN = Number(env.RIFT_MIN_GAP_MIN || 5);
+export const MIN_GAP_MIN = Number(env.RIFT_MIN_GAP_MIN || 10);
 export const WINDOW_MIN = Number(env.RIFT_WINDOW_MIN || 60); // скільки триває перебування у ріфт-світі
 
 /** Пари босів: { rift: bossCode у ріфт-мапі, ours: bossCode у нашій мапі, name?: 'для логів' } */
-export const PAIRS = [];
+export const PAIRS = [
+  // Підтверджено: Eternal Gartua (Verteron, 2101074) ↔ Immortal Gartua (Altgard, 2400800), однакові таймери.
+  // Silent Dartan / Soul Ruler Kashapa / High Commander Lagta теж мають копії в Altgard, але їхні коди в NotMeter не підтверджені.
+  { rift: 2400800, ours: 2101074, name: 'Gartua' },
+];
+export const riftRoleName = (p) => `🔔 Rift: ${p.name}`;
 
 const mapEntries = (data, mapId) => {
   const srv = (data?.servers || []).find((s) => s.serverId === SERVER_ID);

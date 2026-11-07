@@ -7,8 +7,11 @@ import { DateTime } from 'luxon';
 import { CATEGORIES } from './bosses.js';
 import { active, spawnsBetween } from './schedule.js';
 import { NAMES } from './world-bosses.js';
+import { PAIRS, RIFT_MAP_ID, OUR_MAP_ID, MIN_GAP_MIN, WINDOW_MIN, riftRoleName } from './rift-bosses.js';
 
 const env = process.env;
+const RIFT_HOURS = [2, 5, 8, 11, 14, 17, 20, 23];
+const RIFT_LEAD_MIN = Number(env.RIFT_LEAD_MIN || 15);
 const TZ = env.SERVER_TZ || 'Europe/Warsaw';
 const DRY = env.DRY_RUN === '1';
 const API = 'https://discord.com/api/v10';
@@ -45,14 +48,44 @@ async function dueBosses() {
       const t = Math.floor(e.targetAt / 60000) * 60000;
       out.push({ key: `w${e.bossCode}|${t}`, name, time: t, where: 'Verteron' });
     }
+    out.push(...riftOpportunities(srv));
   } catch (e) {
     console.warn('NotMeter недоступний:', e.message);
   }
   return out.sort((a, b) => a.time - b.time);
 }
 
+/** Бос у ріфт-світі (Altgard) раніше за свого двійника у Verteron більш ніж на MIN_GAP_MIN → «спершу в ріфті, потім у нас». */
+function riftOpportunities(srv) {
+  const out = [];
+  const maps = srv?.maps || [];
+  const rift = (maps.find((m) => m.mapId === RIFT_MAP_ID)?.entries) || [];
+  const ours = (maps.find((m) => m.mapId === OUR_MAP_ID)?.entries) || [];
+  for (const p of PAIRS) {
+    const r = rift.find((e) => e.bossCode === p.rift);
+    const o = ours.find((e) => e.bossCode === p.ours);
+    if (!r || !o || r.spawned || o.spawned) continue;
+    const gap = (o.targetAt - r.targetAt) / 60000;
+    if (gap <= MIN_GAP_MIN) continue;
+    // ріфт, у вікно якого потрапляє поява
+    let open = null;
+    const base = DateTime.fromMillis(r.targetAt, { zone: TZ }).startOf('day');
+    for (const d of [-1, 0]) for (const h of RIFT_HOURS) {
+      const c = base.plus({ days: d }).set({ hour: h }).toMillis();
+      if (c <= r.targetAt && r.targetAt <= c + WINDOW_MIN * 60000) open = c;
+    }
+    if (open == null) continue;
+    if (nowMs < open - RIFT_LEAD_MIN * 60000 || nowMs > r.targetAt) continue;
+    const t = Math.floor(r.targetAt / 60000) * 60000;
+    const oursT = Math.floor(o.targetAt / 60000) * 60000;
+    out.push({ key: `rift${p.rift}|${t}`, name: p.name, role: riftRoleName(p), time: t, where: `ріфт (Altgard) → потім у нас о <t:${sec(oursT)}:t> (<t:${sec(oursT)}:R>)`, rift: true });
+  }
+  return out;
+}
+
 /** Усі імена босів, для яких мають існувати ролі. */
 export const allBossNames = () => [...new Set([...active(CATEGORIES.abyss).map((b) => b.name), ...Object.values(NAMES)])];
+export const allRoleNames = () => [...allBossNames().map(roleName), ...PAIRS.map(riftRoleName)];
 
 async function discord(method, url, body) {
   const r = await fetch(`${API}${url}`, {
@@ -73,17 +106,17 @@ async function ensureRoles(names, create) {
   for (const role of roles) map.set(role.name, role.id);
   if (!create) return map;
   for (const n of names) {
-    if (map.has(roleName(n))) continue;
+    if (map.has(n)) continue;
     if (DRY) { console.log('[DRY] створив би роль', roleName(n)); continue; }
-    let c = await discord('POST', `/guilds/${env.GUILD_ID}/roles`, { name: roleName(n), mentionable: true, permissions: '0' });
+    let c = await discord('POST', `/guilds/${env.GUILD_ID}/roles`, { name: n, mentionable: true, permissions: '0' });
     if (c.status === 429) {
       const wait = ((await c.json()).retry_after || 3) * 1000 + 500;
       await new Promise((x) => setTimeout(x, wait));
-      c = await discord('POST', `/guilds/${env.GUILD_ID}/roles`, { name: roleName(n), mentionable: true, permissions: '0' });
+      c = await discord('POST', `/guilds/${env.GUILD_ID}/roles`, { name: n, mentionable: true, permissions: '0' });
     }
     if (!c.ok) { console.warn('Роль не створено:', n, c.status, await c.text()); if (c.status === 403) break; continue; }
-    map.set(roleName(n), (await c.json()).id);
-    console.log('Створено роль', roleName(n));
+    map.set(n, (await c.json()).id);
+    console.log('Створено роль', n);
     await new Promise((x) => setTimeout(x, 800));
   }
   return map;
@@ -99,7 +132,7 @@ function saveState(st) {
 async function main() {
   const url = env.NOTIFY_WEBHOOK_URL;
   if (!url && !DRY) return console.log('Немає NOTIFY_WEBHOOK_URL: сповіщення пропущено');
-  const roles = await ensureRoles(allBossNames(), env.ENSURE_ROLES !== '0');
+  const roles = await ensureRoles(allRoleNames(), env.ENSURE_ROLES !== '0');
   const st = loadState();
   const due = (await dueBosses()).filter((b) => !st.sent[b.key]);
   if (!due.length) return console.log('Нових сповіщень немає');
@@ -109,9 +142,10 @@ async function main() {
   for (const b of due) { if (!groups.has(b.time)) groups.set(b.time, []); groups.get(b.time).push(b); }
   for (const [time, list] of groups) {
     const s = sec(time);
-    const pings = list.map((b) => roles.get(roleName(b.name))).filter(Boolean);
+    const pings = list.map((b) => roles.get(b.role || roleName(b.name))).filter(Boolean);
     const names = list.map((b) => `**${b.name}**`).join(', ');
-    const content = `${pings.map((id) => `<@&${id}>`).join(' ')}\n🔔 ${names} — <t:${s}:R> (<t:${s}:t>) · ${list[0].where}`.trim();
+    const head = list[0].rift ? '🌀 Ріфт: вбий спершу там!' : '🔔';
+    const content = `${pings.map((id) => `<@&${id}>`).join(' ')}\n${head} ${names} — <t:${s}:R> (<t:${s}:t>) · ${list[0].where}`.trim();
     const body = { content, allowed_mentions: { roles: pings } };
     if (DRY) console.log('[DRY]', JSON.stringify(body));
     else {
