@@ -26,7 +26,7 @@ const NOTMETER = env.NOTMETER_URL ||
 const sec = (ms) => Math.floor(ms / 1000);
 const roleName = (boss) => `🔔 ${boss}`;
 
-const now = DateTime.now().setZone(TZ);
+const now = (env.FAKE_NOW ? DateTime.fromISO(env.FAKE_NOW, { zone: TZ }) : DateTime.now().setZone(TZ));
 const nowMs = now.toMillis();
 
 /** Усі «відстежувані» боси: { key, name, time(ms), where } у вікні [now+MIN, now+MAX]. */
@@ -45,6 +45,11 @@ async function dueBosses() {
       if (t > to) break;
       out.push({ key: `${id}|${t.toMillis()}`, name: ev.name, time: t.toMillis(), where, shugo: true, emoji: ev.emoji, ...(id === 'siege' ? { role: SIEGE_ROLE } : {}) });
     }
+  }
+  // Нагадування у вівторок о 12:00 (серверний час): завтра тижневий ресет, роль Soldier
+  if (now.weekday === 2 && now.hour === 12 && now.minute < 15) {
+    const reset = nextOccurrences(EVENTS.find((e) => e.id === 'weekly-reset'), now, TZ, 1)[0];
+    if (reset) out.push({ key: `weekly-remind|${now.toISODate()}`, name: 'Тижневий ресет', time: reset.toMillis(), where: '', weekly: true, role: SIEGE_ROLE });
   }
   // світові боси Verteron (NotMeter)
   try {
@@ -171,7 +176,7 @@ async function main() {
     const pings = list.map((b) => roles.get(b.role || roleName(b.name))).filter(Boolean);
     const names = list.map((b) => `**${b.name}**`).join(', ');
     const head = list[0].rift ? '🌀 Можна встигнути вбити і в ріфті, і в нашому світі:' : list[0].shugo ? list[0].emoji : '🔔';
-    const content = list[0].rift ? `${pings.map((id) => `<@&${id}>`).join(' ')}\n${head} ${names} — ${list[0].where}` : `${pings.map((id) => `<@&${id}>`).join(' ')}\n${head} ${names} — <t:${s}:R> (<t:${s}:t>) · ${list[0].where}`.trim();
+    const content = list[0].weekly ? `${pings.map((id) => `<@&${id}>`).join(' ')}\n⏰ **Завтра тижневий ресет сервера** (<t:${s}:f>, <t:${s}:R>)!\nНе забудьте витратити всі квитки й ліміти в тижневих подіях.` : list[0].rift ? `${pings.map((id) => `<@&${id}>`).join(' ')}\n${head} ${names} — ${list[0].where}` : `${pings.map((id) => `<@&${id}>`).join(' ')}\n${head} ${names} — <t:${s}:R> (<t:${s}:t>) · ${list[0].where}`.trim();
     const body = { content, allowed_mentions: { roles: pings } };
     if (DRY) console.log('[DRY]', JSON.stringify(body));
     else {
