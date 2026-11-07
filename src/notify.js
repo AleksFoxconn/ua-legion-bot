@@ -1,0 +1,128 @@
+// Сповіщення «бос з'явиться через ~10–15 хв» з пінгом ролі конкретного боса (вибір ролей — Onboarding/Carl-bot).
+// Запускається часто (кожні ~5 хв, зовнішній cron → workflow_dispatch). Повідомлення йде у канал через вебхук.
+// Секрети: NOTIFY_WEBHOOK_URL, DISCORD_TOKEN (для ролей), GUILD_ID. Стан: .cache/notify/state.json (кеш Actions).
+import fs from 'node:fs';
+import path from 'node:path';
+import { DateTime } from 'luxon';
+import { CATEGORIES } from './bosses.js';
+import { active, spawnsBetween } from './schedule.js';
+import { NAMES } from './world-bosses.js';
+
+const env = process.env;
+const TZ = env.SERVER_TZ || 'Europe/Warsaw';
+const DRY = env.DRY_RUN === '1';
+const API = 'https://discord.com/api/v10';
+const STATE_FILE = env.STATE_FILE || '.cache/notify/state.json';
+const MIN_BEFORE = Number(env.NOTIFY_MIN || 2); // не пінгуємо, якщо лишилось менше (вже пізно)
+const MAX_BEFORE = Number(env.NOTIFY_MAX || 15); // і не раніше ніж за стільки хвилин
+const NOTMETER = env.NOTMETER_URL ||
+  'https://raw.githubusercontent.com/Not4You-Dev/NotMeter-Cache/main/presence/notmeter-field-boss-public-ww-eu-expanded.json';
+const sec = (ms) => Math.floor(ms / 1000);
+const roleName = (boss) => `🔔 ${boss}`;
+
+const now = DateTime.now().setZone(TZ);
+const nowMs = now.toMillis();
+
+/** Усі «відстежувані» боси: { key, name, time(ms), where } у вікні [now+MIN, now+MAX]. */
+async function dueBosses() {
+  const from = now.plus({ minutes: MIN_BEFORE });
+  const to = now.plus({ minutes: MAX_BEFORE });
+  const out = [];
+  // Abyss (за розкладом), включно з Watcher Kaira
+  for (const boss of active(CATEGORIES.abyss)) {
+    for (const t of spawnsBetween(boss, from, to, TZ)) out.push({ key: `${boss.id}|${t.toMillis()}`, name: boss.name, time: t.toMillis(), where: boss.zone });
+  }
+  // світові боси Verteron (NotMeter)
+  try {
+    const r = await fetch(NOTMETER);
+    if (!r.ok) throw new Error(`NotMeter ${r.status}`);
+    const data = await r.json();
+    const srv = (data.servers || []).find((s) => s.serverId === 1315);
+    const map = (srv?.maps || []).find((m) => m.mapId === 1010);
+    for (const e of map?.entries || []) {
+      if (e.spawned || e.targetAt < from.toMillis() || e.targetAt > to.toMillis()) continue;
+      const name = NAMES[e.bossCode] || `#${e.bossCode}`;
+      const t = Math.floor(e.targetAt / 60000) * 60000;
+      out.push({ key: `w${e.bossCode}|${t}`, name, time: t, where: 'Verteron' });
+    }
+  } catch (e) {
+    console.warn('NotMeter недоступний:', e.message);
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
+
+/** Усі імена босів, для яких мають існувати ролі. */
+export const allBossNames = () => [...new Set([...active(CATEGORIES.abyss).map((b) => b.name), ...Object.values(NAMES)])];
+
+async function discord(method, url, body) {
+  const r = await fetch(`${API}${url}`, {
+    method,
+    headers: { Authorization: `Bot ${env.DISCORD_TOKEN}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return r;
+}
+
+/** Знаходить/створює ролі «🔔 Boss». Повертає Map(name → id). */
+async function ensureRoles(names, create) {
+  const map = new Map();
+  if (!env.DISCORD_TOKEN || !env.GUILD_ID) return map;
+  const r = await discord('GET', `/guilds/${env.GUILD_ID}/roles`);
+  if (!r.ok) { console.warn('Ролі недоступні:', r.status); return map; }
+  const roles = await r.json();
+  for (const role of roles) map.set(role.name, role.id);
+  if (!create) return map;
+  for (const n of names) {
+    if (map.has(roleName(n))) continue;
+    if (DRY) { console.log('[DRY] створив би роль', roleName(n)); continue; }
+    let c = await discord('POST', `/guilds/${env.GUILD_ID}/roles`, { name: roleName(n), mentionable: true, permissions: '0' });
+    if (c.status === 429) {
+      const wait = ((await c.json()).retry_after || 3) * 1000 + 500;
+      await new Promise((x) => setTimeout(x, wait));
+      c = await discord('POST', `/guilds/${env.GUILD_ID}/roles`, { name: roleName(n), mentionable: true, permissions: '0' });
+    }
+    if (!c.ok) { console.warn('Роль не створено:', n, c.status, await c.text()); if (c.status === 403) break; continue; }
+    map.set(roleName(n), (await c.json()).id);
+    console.log('Створено роль', roleName(n));
+    await new Promise((x) => setTimeout(x, 800));
+  }
+  return map;
+}
+
+function loadState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return { sent: {} }; } }
+function saveState(st) {
+  for (const k of Object.keys(st.sent)) if (st.sent[k] < nowMs - 6 * 3600e3) delete st.sent[k];
+  fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+  fs.writeFileSync(STATE_FILE, JSON.stringify(st));
+}
+
+async function main() {
+  const url = env.NOTIFY_WEBHOOK_URL;
+  if (!url && !DRY) return console.log('Немає NOTIFY_WEBHOOK_URL: сповіщення пропущено');
+  const roles = await ensureRoles(allBossNames(), env.ENSURE_ROLES !== '0');
+  const st = loadState();
+  const due = (await dueBosses()).filter((b) => !st.sent[b.key]);
+  if (!due.length) return console.log('Нових сповіщень немає');
+
+  // боси з однаковим часом — в одне повідомлення
+  const groups = new Map();
+  for (const b of due) { if (!groups.has(b.time)) groups.set(b.time, []); groups.get(b.time).push(b); }
+  for (const [time, list] of groups) {
+    const s = sec(time);
+    const pings = list.map((b) => roles.get(roleName(b.name))).filter(Boolean);
+    const names = list.map((b) => `**${b.name}**`).join(', ');
+    const content = `${pings.map((id) => `<@&${id}>`).join(' ')}\n🔔 ${names} — <t:${s}:R> (<t:${s}:t>) · ${list[0].where}`.trim();
+    const body = { content, allowed_mentions: { roles: pings } };
+    if (DRY) console.log('[DRY]', JSON.stringify(body));
+    else {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) { console.warn('Вебхук:', r.status, await r.text()); continue; }
+    }
+    for (const b of list) st.sent[b.key] = nowMs;
+    console.log('Сповіщення:', names);
+    await new Promise((x) => setTimeout(x, 700));
+  }
+  saveState(st);
+}
+
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) await main();

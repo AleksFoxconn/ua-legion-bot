@@ -1,0 +1,18 @@
+{
+  "name": "ua-legion-bot",
+  "version": "0.1.0",
+  "description": "Aion 2 boss timers for the UA Legion Discord server",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "run-once": "node src/run-once.js",
+    "test": "node src/schedule.test.js"
+  },
+  "dependencies": {
+    "luxon": "^3.5.0"
+  },
+  "optionalDependencies": {
+    "discord.js": "^14.16.0"
+  }
+}

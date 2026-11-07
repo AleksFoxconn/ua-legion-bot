@@ -1,0 +1,22 @@
+name: Events board
+
+# Табло подій тепер оновлюється разом із Field board (кожні 30 хв). Тут лише ручний запуск.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --omit=optional
+      - run: node src/events-board.js
+        env:
+          SERVER_TZ: ${{ vars.SERVER_TZ || 'Asia/Seoul' }}
+          EVENTS_WEBHOOK_URL: ${{ secrets.EVENTS_WEBHOOK_URL }}
+          EVENTS_BOARD_MESSAGE_ID: ${{ secrets.EVENTS_BOARD_MESSAGE_ID }}
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          GUILD_ID: ${{ vars.GUILD_ID }}

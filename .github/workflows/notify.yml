@@ -1,0 +1,29 @@
+name: Boss notify
+
+on:
+  workflow_dispatch: {}   # запускає зовнішній cron (cron-job.org) кожні ~5 хв
+
+concurrency:
+  group: boss-notify
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .cache/notify
+          key: notify-state-${{ github.run_id }}
+          restore-keys: notify-state-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --omit=optional
+      - run: node src/notify.js
+        env:
+          SERVER_TZ: ${{ vars.SERVER_TZ || 'Europe/Warsaw' }}
+          NOTIFY_WEBHOOK_URL: ${{ secrets.NOTIFY_WEBHOOK_URL }}
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          GUILD_ID: ${{ vars.GUILD_ID }}

@@ -1,0 +1,23 @@
+name: Boss board
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'   # кожні 6 годин (час UTC; GitHub може запізнюватись)
+  workflow_dispatch: {}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --omit=optional
+      - run: node src/run-once.js
+        env:
+          SERVER_TZ: ${{ vars.SERVER_TZ || 'Europe/Warsaw' }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          BOARD_MESSAGE_ID: ${{ secrets.BOARD_MESSAGE_ID }}
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          GUILD_ID: ${{ vars.GUILD_ID }}
