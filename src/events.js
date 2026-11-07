@@ -23,11 +23,6 @@ export const EVENTS = [
   },
   // Нижче — за даними сторонніх сайтів (aion2timers, allthings.how, metabot): для Global не підтверджено, дивись нотатки.
   {
-    id: 'domination', discordEvent: true, name: 'Rift Domination (PvP)', emoji: '⚔️', show: 2, windowMin: 20,
-    weekdays: [1, 4, 6], hours: [20, 23], minute: 0,
-    note: 'пн/чт/сб, 5 хв підготовки + 15 хв матч (за корейським патчем; на Global не підтверджено)',
-  },
-  {
     id: 'arena', discordEvent: true, name: 'Battlefield (10v10)', emoji: '🏟️', show: 2, windowMin: 180,
     hours: [11, 19], minute: 0,
     note: 'щодня 11:00–14:00 та 19:00–21:00 (за metabot/allthings; перший слот 3 год, другий 2 год)',
