@@ -37,11 +37,13 @@ async function dueBosses() {
   for (const boss of active(CATEGORIES.abyss)) {
     for (const t of spawnsBetween(boss, from, to, TZ)) out.push({ key: `${boss.id}|${t.toMillis()}`, name: boss.name, time: t.toMillis(), where: boss.zone });
   }
-  // Shugo Festival (щогодини) — окрема роль
-  const shugo = EVENTS.find((e) => e.id === 'shugo');
-  for (const t of nextOccurrences(shugo, from.minus({ minutes: 1 }), TZ, 3)) {
-    if (t > to) break;
-    out.push({ key: `shugo|${t.toMillis()}`, name: SHUGO, time: t.toMillis(), where: 'Verteron / Altgard', shugo: true });
+  // Івенти з окремими ролями: Shugo Festival (щогодини), Artifact Siege (чт/сб)
+  for (const [id, where] of [['shugo', 'Verteron / Altgard'], ['siege', 'Chaotic Lower Reshanta']]) {
+    const ev = EVENTS.find((e) => e.id === id);
+    for (const t of nextOccurrences(ev, from.minus({ minutes: 1 }), TZ, 3)) {
+      if (t > to) break;
+      out.push({ key: `${id}|${t.toMillis()}`, name: ev.name, time: t.toMillis(), where, shugo: true, emoji: ev.emoji });
+    }
   }
   // світові боси Verteron (NotMeter)
   try {
@@ -93,7 +95,7 @@ function riftOpportunities(srv) {
 
 /** Усі імена босів, для яких мають існувати ролі. */
 export const allBossNames = () => [...new Set([...active(CATEGORIES.abyss).map((b) => b.name), ...Object.values(NAMES)])];
-export const allRoleNames = () => [...allBossNames().map(roleName), roleName(SHUGO)];
+export const allRoleNames = () => [...allBossNames().map(roleName), roleName(SHUGO), roleName('Artifact Siege')];
 
 async function discord(method, url, body) {
   const r = await fetch(`${API}${url}`, {
@@ -167,7 +169,7 @@ async function main() {
     const s = sec(list[0].time);
     const pings = list.map((b) => roles.get(b.role || roleName(b.name))).filter(Boolean);
     const names = list.map((b) => `**${b.name}**`).join(', ');
-    const head = list[0].rift ? '🌀 Можна встигнути вбити і в ріфті, і в нашому світі:' : list[0].shugo ? '🎉' : '🔔';
+    const head = list[0].rift ? '🌀 Можна встигнути вбити і в ріфті, і в нашому світі:' : list[0].shugo ? list[0].emoji : '🔔';
     const content = list[0].rift ? `${pings.map((id) => `<@&${id}>`).join(' ')}\n${head} ${names} — ${list[0].where}` : `${pings.map((id) => `<@&${id}>`).join(' ')}\n${head} ${names} — <t:${s}:R> (<t:${s}:t>) · ${list[0].where}`.trim();
     const body = { content, allowed_mentions: { roles: pings } };
     if (DRY) console.log('[DRY]', JSON.stringify(body));
