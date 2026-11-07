@@ -26,6 +26,10 @@ if (!ch) ch = await call('POST', `/guilds/${guild}/channels`, {
   permission_overwrites: notif?.permission_overwrites ?? [],
 });
 console.log('Канал', ch.id);
+const me = await call('GET', '/users/@me');
+const ow = (ch.permission_overwrites || []).filter((o) => o.id !== me.id);
+ow.push({ id: me.id, type: 1, allow: String(1024n | 2048n | 64n | 65536n), deny: '0' });
+await call('PUT', `/channels/${ch.id}/permissions/${me.id}`, { type: 1, allow: String(1024n | 2048n | 64n | 65536n), deny: '0' });
 const world = Object.values(NAMES);
 const abyss = active(CATEGORIES.abyss).map((b) => b.name);
 const groups = [
