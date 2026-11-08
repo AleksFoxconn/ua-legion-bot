@@ -14,6 +14,7 @@ const env = process.env;
 const RIFT_HOURS = [2, 5, 8, 11, 14, 17, 20, 23];
 const SHUGO = 'Shugo Festival';
 const SIEGE_ROLE = env.SIEGE_ROLE || 'Soldier'; // на Artifact Siege пінгуємо всіх з цією роллю
+const RIFT_KEEP_MIN = Number(env.RIFT_KEEP_MIN || 10); // видаляємо ріфт-повідомлення через стільки хв після відкриття ріфту
 const RIFT_LEAD_MIN = Number(env.RIFT_LEAD_MIN || 15);
 const TZ = env.SERVER_TZ || 'Europe/Warsaw';
 const DRY = env.DRY_RUN === '1';
@@ -91,10 +92,11 @@ function riftOpportunities(srv) {
       if (c <= r.targetAt && r.targetAt <= c + WINDOW_MIN * 60000) open = c;
     }
     if (open == null) continue;
-    if (nowMs < open - RIFT_LEAD_MIN * 60000 || nowMs > r.targetAt) continue;
+    const closeMs = open + RIFT_KEEP_MIN * 60000; // повідомлення живе до цього моменту
+    if (nowMs < open - RIFT_LEAD_MIN * 60000 || nowMs >= closeMs || nowMs > r.targetAt) continue;
     const t = Math.floor(r.targetAt / 60000) * 60000;
     const oursT = Math.floor(o.targetAt / 60000) * 60000;
-    out.push({ key: `rift${p.rift}|${t}`, name: p.name, time: t, where: `у ріфті (Altgard) о <t:${sec(t)}:t>, а в нашому світі (Verteron) о <t:${sec(oursT)}:t> (<t:${sec(oursT)}:R>)`, rift: true });
+    out.push({ key: `rift${p.rift}|${t}`, name: p.name, time: t, where: `у ріфті (Altgard) о <t:${sec(t)}:t>, а в нашому світі (Verteron) о <t:${sec(oursT)}:t> (<t:${sec(oursT)}:R>)`, rift: true, delAt: closeMs });
   }
   return out;
 }
@@ -182,7 +184,7 @@ async function main() {
     else {
       const r = await fetch(`${url}${url.includes('?') ? '&' : '?'}wait=true`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!r.ok) { console.warn('Вебхук:', r.status, await r.text()); continue; }
-      try { st.msgs.push({ id: (await r.json()).id, time: Math.max(...list.map((b) => b.time + (b.keepMs || 0))) }); } catch {}
+      try { st.msgs.push({ id: (await r.json()).id, time: Math.max(...list.map((b) => b.delAt ?? (b.time + (b.keepMs || 0)))) }); } catch {}
     }
     for (const b of list) st.sent[b.key] = nowMs;
     console.log('Сповіщення:', names);
