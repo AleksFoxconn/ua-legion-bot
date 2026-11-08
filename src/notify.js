@@ -170,7 +170,7 @@ async function main() {
 
   // боси з однаковим часом — в одне повідомлення
   const groups = new Map();
-  for (const b of due) { const gk = b.rift ? `r${b.key}` : b.time; if (!groups.has(gk)) groups.set(gk, []); groups.get(gk).push(b); }
+  for (const b of due) { const gk = (b.rift || b.shugo || b.weekly) ? `r${b.key}` : b.time; if (!groups.has(gk)) groups.set(gk, []); groups.get(gk).push(b); }
   for (const [, list] of groups) {
     const s = sec(list[0].time);
     const pings = list.map((b) => roles.get(b.role || roleName(b.name))).filter(Boolean);
