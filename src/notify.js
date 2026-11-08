@@ -39,7 +39,7 @@ async function dueBosses() {
     for (const t of spawnsBetween(boss, from, to, TZ)) out.push({ key: `${boss.id}|${t.toMillis()}`, name: boss.name, time: t.toMillis(), where: boss.zone });
   }
   // Івенти з окремими ролями: Shugo Festival (щогодини), Artifact Siege (чт/сб)
-  for (const [id, where] of [['shugo', 'Verteron / Altgard'], ['siege', 'Chaotic Lower Reshanta']]) {
+  for (const [id, where] of [['shugo', 'Verteron / Altgard'], ['rift', 'портал у ворожу локацію, рівень 45+'], ['siege', 'Chaotic Lower Reshanta']]) {
     const ev = EVENTS.find((e) => e.id === id);
     for (const t of nextOccurrences(ev, from.minus({ minutes: 1 }), TZ, 3)) {
       if (t > to) break;
@@ -101,7 +101,7 @@ function riftOpportunities(srv) {
 
 /** Усі імена босів, для яких мають існувати ролі. */
 export const allBossNames = () => [...new Set([...active(CATEGORIES.abyss).map((b) => b.name), ...Object.values(NAMES)])];
-export const allRoleNames = () => [...allBossNames().map(roleName), roleName(SHUGO)];
+export const allRoleNames = () => [...allBossNames().map(roleName), roleName(SHUGO), roleName('Spacetime Rift')];
 
 async function discord(method, url, body) {
   const r = await fetch(`${API}${url}`, {
