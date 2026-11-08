@@ -1,0 +1,19 @@
+name: Sync reaction roles
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '17 * * * *'
+concurrency:
+  group: sync-reaction-roles
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node src/sync-reaction-roles.js
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          GUILD_ID: ${{ vars.GUILD_ID }}
