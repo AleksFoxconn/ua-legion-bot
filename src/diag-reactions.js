@@ -14,3 +14,17 @@ for (const m of msgs.reverse()) {
   const rx = (m.reactions || []).map((x) => `${x.emoji.name}×${x.count}${x.me ? '(bot)' : ''}`).join(' ');
   console.log(m.id, m.author.username, '|', m.content.split('\n')[0].slice(0, 50), '|', rx || 'БЕЗ РЕАКЦІЙ');
 }
+console.log('--- ХТО РЕАГУВАВ (2/2 і 1/2) ---');
+const rn = Object.fromEntries(roles.map((r) => [r.id, r.name]));
+for (const id of ['1568698501171380335', '1568698474030047313']) {
+  const m = msgs.find((x) => x.id === id);
+  for (const x of m.reactions || []) {
+    const us = await get(`/channels/${ch.id}/messages/${id}/reactions/${encodeURIComponent(x.emoji.name)}?limit=10`);
+    const parts = [];
+    for (const u of us) {
+      const mem = await get(`/guilds/${guild}/members/${u.id}`);
+      parts.push(`${u.username}${u.bot ? '[bot]' : ''}:${(mem.roles || []).map((i) => rn[i]).filter((n) => n && n.startsWith('🔔')).join('/') || '-'}`);
+    }
+    console.log(id.slice(-4), x.emoji.name, parts.join(' , '));
+  }
+}
