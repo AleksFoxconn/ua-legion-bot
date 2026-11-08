@@ -43,7 +43,7 @@ async function dueBosses() {
     const ev = EVENTS.find((e) => e.id === id);
     for (const t of nextOccurrences(ev, from.minus({ minutes: 1 }), TZ, 3)) {
       if (t > to) break;
-      out.push({ key: `${id}|${t.toMillis()}`, name: ev.name, time: t.toMillis(), where, shugo: true, emoji: ev.emoji, ...(id === 'siege' ? { role: SIEGE_ROLE } : {}) });
+      out.push({ key: `${id}|${t.toMillis()}`, name: ev.name, time: t.toMillis(), where, shugo: true, emoji: ev.emoji, keepMs: id === 'rift' ? ev.windowMin * 60000 : 0, ...(id === 'siege' ? { role: SIEGE_ROLE } : {}) });
     }
   }
   // Нагадування у вівторок о 12:00 (серверний час): завтра тижневий ресет, роль Soldier
@@ -182,7 +182,7 @@ async function main() {
     else {
       const r = await fetch(`${url}${url.includes('?') ? '&' : '?'}wait=true`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!r.ok) { console.warn('Вебхук:', r.status, await r.text()); continue; }
-      try { st.msgs.push({ id: (await r.json()).id, time: list[0].time }); } catch {}
+      try { st.msgs.push({ id: (await r.json()).id, time: Math.max(...list.map((b) => b.time + (b.keepMs || 0))) }); } catch {}
     }
     for (const b of list) st.sent[b.key] = nowMs;
     console.log('Сповіщення:', names);
