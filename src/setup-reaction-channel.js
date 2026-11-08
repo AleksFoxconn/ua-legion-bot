@@ -28,7 +28,7 @@ const groups = [
 ];
 for (const [title, names, em = EMOJI] of groups) {
   const lines = names.map((n, i) => `${em[i]} — ${n}`).join('\n');
-  const msg = await call('POST', `/channels/${ch.id}/messages`, { content: `${title}\nПостав реакцію, щоб отримувати пінги по цьому босу:\n\n${lines}` });
+  const msg = await call('POST', `/channels/${ch.id}/messages`, { content: `${title}\n${em === EMOJI ? 'Постав реакцію, щоб отримувати пінги по цьому босу:' : 'Постав реакцію, щоб отримувати пінги по цій події:'}\n\n${lines}` });
   for (let i = 0; i < names.length; i++) { await call('PUT', `/channels/${ch.id}/messages/${msg.id}/reactions/${encodeURIComponent(em[i])}/@me`); await sleep(350); }
   console.log('MSG', msg.id, '|', names.map((n, i) => `${em[i]}=${n}`).join('; '));
 }
