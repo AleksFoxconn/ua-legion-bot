@@ -34,3 +34,6 @@ jobs:
         if: always()
         env:
           UPDATES_WEBHOOK_URL: ${{ secrets.UPDATES_WEBHOOK_URL }}
+          TRANSLATE_BUTTON: ${{ vars.TRANSLATE_BUTTON }}
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          GUILD_ID: ${{ vars.GUILD_ID }}

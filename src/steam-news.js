@@ -4,6 +4,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { sec } from './style.js';
+import { bbToMd, localizeTimes, cut } from './steam-format.js';
+export { bbToMd, localizeTimes };
 
 const env = process.env;
 const APP_ID = env.STEAM_APP_ID || '3393110';
@@ -13,79 +15,6 @@ const MAX_AGE_H = Number(env.UPDATES_MAX_AGE_H || 48); // нові пости с
 const MAX_POSTS = 5;
 const FMT_V = 2; // версія оформлення постів (2 = час у місцевому поясі читача)
 const URL_API = `https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${APP_ID}&count=40&maxlength=0&format=json`;
-
-// ---------- Steam BBCode → Discord Markdown ----------
-export function bbToMd(src) {
-  let s = String(src || '').replace(/[\u200b-\u200d\ufeff]/g, '');
-  s = s.replace(/\[img[^\]]*\][\s\S]*?\[\/img\]/gi, '');
-  s = s.replace(/\[url=([^\]]+)\]([\s\S]*?)\[\/url\]/gi, '[$2]($1)');
-  s = s.replace(/\[h[1-3]\]([\s\S]*?)\[\/h[1-3]\]/gi, (_, t) => `\n**${t.replace(/\[\/?b\]/gi, '').trim()}**\n`);
-  s = s.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '**$1**');
-  s = s.replace(/\[i\]([\s\S]*?)\[\/i\]/gi, '*$1*');
-  s = s.replace(/\[u\]([\s\S]*?)\[\/u\]/gi, '__$1__');
-  s = s.replace(/\[strike\]([\s\S]*?)\[\/strike\]/gi, '~~$1~~');
-  s = s.replace(/\[\*\]/g, '\n• ').replace(/\[\/\*\]/g, '');
-  s = s.replace(/\[\/t[dh]\]/gi, ' | ').replace(/\[\/tr\]/gi, '\n');
-  s = s.replace(/\[\/p\]/gi, '\n').replace(/\[hr\]/gi, '\n');
-  s = s.replace(/\[\/?(?:p|list|olist|table|tr|td|th|h\d|b|i|u|strike|hr|quote|code|spoiler|url|noparse|previewyoutube)(?:[= ][^\]]*)?\]/gi, '');
-  s = s.replace(/\\\[/g, '[').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-  s = s
-    .split('\n')
-    .map((l) => l.replace(/\s*\|\s*$/, '').replace(/[ \t]+$/g, ''))
-    .filter((l, i, a) => !(l.trim() === '' && a[i - 1]?.trim() === ''))
-    .join('\n');
-  return s.trim();
-}
-
-
-// ---------- час → <t:...> (Discord показує кожному у його часовому поясі) ----------
-const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-const TZ_OFF = { PST: -8, PDT: -7, UTC: 0, GMT: 0, CET: 1, CEST: 2, KST: 9 };
-const TZ = 'PST|PDT|UTC|GMT|CET|CEST|KST';
-const D = '([A-Z][a-z]{2,8})\\.?\\s+(\\d{1,2})(?:,\\s*(\\d{4}))?';
-function toTs(mon, day, year, hm, tz, postSec) {
-  const m = MONTHS[mon.slice(0, 3).toLowerCase()];
-  if (m === undefined || !(tz in TZ_OFF)) return null;
-  const [h, mi] = hm.split(':').map(Number);
-  const post = new Date(postSec * 1000);
-  let y = year ? Number(year) : post.getUTCFullYear();
-  const mk = (yy) => Date.UTC(yy, m, Number(day), h, mi) / 1000 - TZ_OFF[tz] * 3600;
-  let t = mk(y);
-  if (!year && t < postSec - 150 * 86400) t = mk(y + 1); // дата без року, що вже «в минулому» → наступний рік
-  return t;
-}
-const fmt = (t) => `<t:${t}:F>`;
-export function localizeTimes(text, postSec) {
-  const lines = String(text).split('\n');
-  const out = [];
-  let skipTz = false;
-  for (const line of lines) {
-    if (skipTz && new RegExp(`^\\s*(?:■\\s*)?(?:${TZ}):\\s*[A-Z]`).test(line)) continue; // дублікат в іншому поясі
-    // діапазон: "PST: November 4, 2026 at 06:00 - November 17, 2026 at 23:59"
-    const rg = line.match(new RegExp(`^(\\s*(?:■\\s*)?)(${TZ}):\\s*${D}\\s+at\\s+(\\d{1,2}:\\d{2})\\s*[-–]\\s*${D.replace(/\(\[A-Z\]/, '([A-Z]')}\\s+at\\s+(\\d{1,2}:\\d{2})\\s*$`));
-    if (rg) {
-      const [, pre, tz, m1, d1, y1, h1, m2, d2, y2, h2] = rg;
-      const a = toTs(m1, d1, y1, h1, tz, postSec);
-      const b = toTs(m2, d2, y2 || y1, h2, tz, postSec);
-      if (a && b) { out.push(`${pre}${fmt(a)} – ${fmt(b)}`); skipTz = true; continue; }
-    }
-    skipTz = false;
-    // одиночний час: "November 10, from 12:00 PST / 20:00 CET", "Nov 4, 00:00 PST / 09:00 CET"
-    const rest = `(?:\\s*\\/\\s*(?:[A-Z][a-z]{2,8}\\.?\\s+\\d{1,2}(?:,\\s*\\d{4})?(?:,|\\s+at)?\\s*)?\\d{1,2}:\\d{2}\\s*(?:${TZ}))*`;
-    const re = new RegExp(`${D}(?:,|\\s+at)?\\s*(?:from\\s+)?(\\d{1,2}:\\d{2})\\s*(${TZ})${rest}`, 'g');
-    out.push(line.replace(re, (all, mon, day, year, hm, tz) => {
-      const t = toTs(mon, day, year, hm, tz, postSec);
-      return t ? `${fmt(t)} (<t:${t}:R>)` : all;
-    }));
-  }
-  return out.join('\n');
-}
-
-const cut = (s, n) => {
-  if (s.length <= n) return s;
-  const i = s.lastIndexOf('\n', n);
-  return s.slice(0, i > n * 0.6 ? i : n).trimEnd() + '\n…';
-};
 
 // ---------- відбір та типи ----------
 const OTHER_REGION = /\((?:NAW|NAE|NA|SA|SAM|ASIA|JP|KR|LATAM)\)/i; // регіональні роботи не для EU
@@ -144,6 +73,40 @@ async function send(url, embed, mid) {
   return (await r.json()).id;
 }
 
+// ---------- публікація: через бота (з кнопкою «Перекласти») або вебхук ----------
+const BOT = env.TRANSLATE_BUTTON === '1' && env.DISCORD_TOKEN && env.GUILD_ID;
+const DAPI = 'https://discord.com/api/v10';
+const DH = { Authorization: `Bot ${env.DISCORD_TOKEN}`, 'Content-Type': 'application/json' };
+let chanId;
+async function botChannel() {
+  if (chanId) return chanId;
+  const chans = await (await fetch(`${DAPI}/guilds/${env.GUILD_ID}/channels`, { headers: DH })).json();
+  const c = chans.find((x) => x.name === (env.UPDATES_CHANNEL || 'оновлення'));
+  if (!c) throw new Error('Канал оновлень не знайдено');
+  return (chanId = c.id);
+}
+const buttons = (gid) => [{ type: 1, components: [{ type: 2, style: 2, label: 'Перекласти', emoji: { name: '🇺🇦' }, custom_id: `tr:${gid}` }] }];
+// повертає { mid, via }; rec — попередній запис (якщо пост уже є)
+async function publish(url, it, kind, rec) {
+  const embed = buildEmbed(it, kind);
+  if (!BOT || DRY) return { mid: await send(url, embed, rec?.mid), via: rec?.via || 'hook' };
+  const ch = await botChannel();
+  const payload = JSON.stringify({ embeds: [embed], components: buttons(it.gid) });
+  if (rec?.mid && rec.via === 'bot') {
+    const r = await fetch(`${DAPI}/channels/${ch}/messages/${rec.mid}`, { method: 'PATCH', headers: DH, body: payload });
+    if (r.ok) return { mid: rec.mid, via: 'bot' };
+    console.warn('PATCH ботом не вдався', r.status);
+  }
+  const r = await fetch(`${DAPI}/channels/${ch}/messages`, { method: 'POST', headers: DH, body: payload });
+  if (!r.ok) throw new Error(`Бот не зміг написати: ${r.status} ${await r.text()}`);
+  const mid = (await r.json()).id;
+  if (rec?.mid && rec.via !== 'bot' && url) { // старий вебхук-пост прибираємо, щоб не було дубля
+    const d = await fetch(`${url}/messages/${rec.mid}`, { method: 'DELETE' });
+    console.log('старий вебхук-пост видалено:', d.status);
+  }
+  return { mid, via: 'bot' };
+}
+
 async function main() {
   const url = env.UPDATES_WEBHOOK_URL;
   if (!url && !DRY) return console.log('Немає UPDATES_WEBHOOK_URL: оновлення гри пропущено');
@@ -167,8 +130,8 @@ async function main() {
     for (const { it } of items) st.seen[it.gid] = { done: isDone(it.title) };
     const last = items.at(-1);
     if (last) {
-      const mid = await send(url, buildEmbed(last.it, last.kind));
-      st.seen[last.it.gid] = { mid, done: isDone(last.it.title) };
+      const { mid, via } = await publish(url, last.it, last.kind);
+      st.seen[last.it.gid] = { mid, via, done: isDone(last.it.title), v: FMT_V };
       posts++;
     }
     st.init = true;
@@ -182,18 +145,18 @@ async function main() {
     if (!rec) {
       if (nowS - it.date > MAX_AGE_H * 3600) { st.seen[it.gid] = { done }; continue; }
       if (posts >= MAX_POSTS) continue;
-      const mid = await send(url, buildEmbed(it, kind));
-      st.seen[it.gid] = { mid, done, v: FMT_V };
+      const { mid, via } = await publish(url, it, kind);
+      st.seen[it.gid] = { mid, via, done, v: FMT_V };
       posts++;
       console.log('Опубліковано:', it.title);
     } else if (kind === 'maintenance' && rec.done !== done) {
-      const mid = await send(url, buildEmbed(it, kind), rec.mid);
-      st.seen[it.gid] = { mid, done, v: FMT_V };
+      const { mid, via } = await publish(url, it, kind, rec);
+      st.seen[it.gid] = { mid, via, done, v: FMT_V };
       console.log('Оновлено статус робіт:', it.title);
-    } else if (rec.mid && rec.v !== FMT_V && nowS - it.date <= MAX_AGE_H * 3600) {
-      // новий формат оформлення (місцевий час) → оновлюємо свіжі вже надіслані пости
-      const mid = await send(url, buildEmbed(it, kind), rec.mid);
-      st.seen[it.gid] = { ...rec, mid, v: FMT_V };
+    } else if (rec.mid && (rec.v !== FMT_V || (BOT && rec.via !== 'bot')) && nowS - it.date <= MAX_AGE_H * 3600) {
+      // новий формат (місцевий час) або перехід на пости від бота з кнопкою → оновлюємо свіжі пости
+      const { mid, via } = await publish(url, it, kind, rec);
+      st.seen[it.gid] = { ...rec, mid, via, v: FMT_V };
       console.log('Переоформлено:', it.title);
     }
   }
