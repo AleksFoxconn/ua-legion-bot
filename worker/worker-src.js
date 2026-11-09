@@ -90,7 +90,7 @@ async function handleTranslate(env, token, gid) {
     useAi = false;
     const title = await tr(env, it.title);
     const body = await translateMd(env, md);
-    const link = `https://store.steampowered.com/news/app/${APP_ID_STEAM}/view/${it.gid}`;
+    const link = `https://steamcommunity.com/games/${APP_ID_STEAM}/announcements/detail/${it.gid}`;
     const text = cut(body, 3900);
     await followup(env, token, { embeds: [{ color: 0x3498db, title: `🇺🇦 ${title}`.slice(0, 250), url: link, description: text + '\n\n*Машинний переклад — за точністю дивись оригінал.*' }] }, true);
   } catch (e) {

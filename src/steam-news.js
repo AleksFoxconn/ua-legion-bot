@@ -13,7 +13,7 @@ const DRY = env.DRY_RUN === '1';
 const STATE_FILE = env.STATE_FILE || '.cache/steam/state.json';
 const MAX_AGE_H = Number(env.UPDATES_MAX_AGE_H || 48); // нові пости старші за це не публікуємо
 const MAX_POSTS = 5;
-const FMT_V = 2; // версія оформлення постів (2 = час у місцевому поясі читача)
+const FMT_V = 3; // версія оформлення постів (2 = час у місцевому поясі читача)
 const URL_API = `https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${APP_ID}&count=40&maxlength=0&format=json`;
 
 // ---------- відбір та типи ----------
@@ -38,7 +38,7 @@ export function buildEmbed(it, kind) {
     head = done ? '✅ **Технічні роботи завершено**\n\n' : '🛠 **Тривають (або заплановані) технічні роботи**\n\n';
     color = done ? 0x2ecc71 : 0xe67e22;
   }
-  const link = `https://store.steampowered.com/news/app/${APP_ID}/view/${it.gid}`;
+  const link = `https://steamcommunity.com/games/${APP_ID}/announcements/detail/${it.gid}`;
   const body = cut(localizeTimes(bbToMd(it.contents), ts), 3400);
   return {
     color,

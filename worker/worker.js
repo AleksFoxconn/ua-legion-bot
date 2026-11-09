@@ -164,7 +164,7 @@ async function handleTranslate(env, token, gid) {
     useAi = false;
     const title = await tr(env, it.title);
     const body = await translateMd(env, md);
-    const link = `https://store.steampowered.com/news/app/${APP_ID_STEAM}/view/${it.gid}`;
+    const link = `https://steamcommunity.com/games/${APP_ID_STEAM}/announcements/detail/${it.gid}`;
     const text = cut(body, 3900);
     await followup(env, token, { embeds: [{ color: 3447003, title: `\u{1F1FA}\u{1F1E6} ${title}`.slice(0, 250), url: link, description: text + "\n\n*\u041C\u0430\u0448\u0438\u043D\u043D\u0438\u0439 \u043F\u0435\u0440\u0435\u043A\u043B\u0430\u0434 \u2014 \u0437\u0430 \u0442\u043E\u0447\u043D\u0456\u0441\u0442\u044E \u0434\u0438\u0432\u0438\u0441\u044C \u043E\u0440\u0438\u0433\u0456\u043D\u0430\u043B.*" }] }, true);
   } catch (e) {
