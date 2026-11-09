@@ -87,14 +87,50 @@ async function verify(req, body, pub) {
 async function gtx(text) {
   const r = await fetch("https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=uk&dt=t", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "Mozilla/5.0" },
     body: "q=" + encodeURIComponent(text)
   });
-  if (!r.ok) throw new Error("translate " + r.status);
+  if (!r.ok) throw new Error("gtx HTTP " + r.status);
   const j = await r.json();
   return j[0].map((x) => x[0]).join("");
 }
-async function translateMd(md) {
+async function cfai(env, text) {
+  if (!env.AI) throw new Error("\u043D\u0435\u043C\u0430\u0454 binding AI");
+  const src = /[а-яіїєґ]/i.test(text) ? "ru" : "en";
+  const parts = [];
+  let cur = "";
+  for (const piece of text.split(/(?<=[.!?\n])\s*/)) {
+    if ((cur + " " + piece).length > 500 && cur) {
+      parts.push(cur);
+      cur = piece;
+    } else cur = cur ? cur + " " + piece : piece;
+  }
+  if (cur) parts.push(cur);
+  const out = [];
+  for (const part of parts) {
+    if (!part.trim()) {
+      out.push(part);
+      continue;
+    }
+    const r = await env.AI.run("@cf/meta/m2m100-1.2b", { text: part, source_lang: src, target_lang: "uk" });
+    out.push(r.translated_text);
+  }
+  return out.join(" ");
+}
+var useAi = false;
+async function tr(env, text) {
+  if (!useAi) {
+    try {
+      return await gtx(text);
+    } catch (e) {
+      console.log("gtx failed:", String(e));
+      if (!env.AI) throw e;
+      useAi = true;
+    }
+  }
+  return cfai(env, text);
+}
+async function translateMd(env, md) {
   const keep = [];
   const prot = md.replace(/<t:\d+(?::[a-zA-Z])?>|\]\(https?:[^)]+\)/g, (m) => {
     keep.push(m);
@@ -111,7 +147,7 @@ async function translateMd(md) {
   }
   if (cur) chunks.push(cur);
   const out = [];
-  for (const c of chunks) out.push(c.trim() ? await gtx(c) : c);
+  for (const c of chunks) out.push(c.trim() ? await tr(env, c) : c);
   return out.join("\n").replace(/\s*ZQ\s*(\d+)\s*ZQ\s*/g, (_, i) => keep[Number(i)] ?? "");
 }
 async function followup(env, token, payload, first) {
@@ -125,12 +161,14 @@ async function handleTranslate(env, token, gid) {
     const it = (await r.json()).appnews.newsitems.find((x) => String(x.gid) === gid);
     if (!it) return followup(env, token, { content: "\u041D\u0435 \u0437\u043D\u0430\u0439\u0448\u043E\u0432 \u0446\u0435\u0439 \u043F\u043E\u0441\u0442 \u0443 Steam (\u0432\u0456\u043D \u043C\u0456\u0433 \u0437\u043D\u0438\u043A\u043D\u0443\u0442\u0438 \u0437\u0456 \u0441\u0442\u0440\u0456\u0447\u043A\u0438)." }, true);
     const md = localizeTimes(bbToMd(it.contents), it.date);
-    const [title, body] = [await gtx(it.title), await translateMd(md)];
+    useAi = false;
+    const title = await tr(env, it.title);
+    const body = await translateMd(env, md);
     const link = `https://store.steampowered.com/news/app/${APP_ID_STEAM}/view/${it.gid}`;
     const text = cut(body, 3900);
     await followup(env, token, { embeds: [{ color: 3447003, title: `\u{1F1FA}\u{1F1E6} ${title}`.slice(0, 250), url: link, description: text + "\n\n*\u041C\u0430\u0448\u0438\u043D\u043D\u0438\u0439 \u043F\u0435\u0440\u0435\u043A\u043B\u0430\u0434 \u2014 \u0437\u0430 \u0442\u043E\u0447\u043D\u0456\u0441\u0442\u044E \u0434\u0438\u0432\u0438\u0441\u044C \u043E\u0440\u0438\u0433\u0456\u043D\u0430\u043B.*" }] }, true);
   } catch (e) {
-    console.log("translate error", e);
+    console.log("translate error:", String(e && e.message || e));
     await followup(env, token, { content: "\u041D\u0435 \u0432\u0434\u0430\u043B\u043E\u0441\u044F \u043F\u0435\u0440\u0435\u043A\u043B\u0430\u0441\u0442\u0438 \u0437\u0430\u0440\u0430\u0437. \u0421\u043F\u0440\u043E\u0431\u0443\u0439 \u0449\u0435 \u0440\u0430\u0437 \u0442\u0440\u043E\u0445\u0438 \u043F\u0456\u0437\u043D\u0456\u0448\u0435." }, true);
   }
 }

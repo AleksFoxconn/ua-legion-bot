@@ -22,15 +22,42 @@ async function verify(req, body, pub) {
 async function gtx(text) {
   const r = await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=uk&dt=t', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' },
     body: 'q=' + encodeURIComponent(text),
   });
-  if (!r.ok) throw new Error('translate ' + r.status);
+  if (!r.ok) throw new Error('gtx HTTP ' + r.status);
   const j = await r.json();
   return j[0].map((x) => x[0]).join('');
 }
 
-async function translateMd(md) {
+// запасний варіант: модель перекладу Cloudflare Workers AI (потрібен binding "AI")
+async function cfai(env, text) {
+  if (!env.AI) throw new Error('немає binding AI');
+  const src = /[а-яіїєґ]/i.test(text) ? 'ru' : 'en';
+  const parts = [];
+  let cur = '';
+  for (const piece of text.split(/(?<=[.!?\n])\s*/)) {
+    if ((cur + ' ' + piece).length > 500 && cur) { parts.push(cur); cur = piece; } else cur = cur ? cur + ' ' + piece : piece;
+  }
+  if (cur) parts.push(cur);
+  const out = [];
+  for (const part of parts) {
+    if (!part.trim()) { out.push(part); continue; }
+    const r = await env.AI.run('@cf/meta/m2m100-1.2b', { text: part, source_lang: src, target_lang: 'uk' });
+    out.push(r.translated_text);
+  }
+  return out.join(' ');
+}
+
+let useAi = false;
+async function tr(env, text) {
+  if (!useAi) {
+    try { return await gtx(text); } catch (e) { console.log('gtx failed:', String(e)); if (!env.AI) throw e; useAi = true; }
+  }
+  return cfai(env, text);
+}
+
+async function translateMd(env, md) {
   // <t:..> і посилання не перекладаємо — підміняємо плейсхолдерами
   const keep = [];
   const prot = md.replace(/<t:\d+(?::[a-zA-Z])?>|\]\(https?:[^)]+\)/g, (m) => { keep.push(m); return ` ZQ${keep.length - 1}ZQ `; });
@@ -42,7 +69,7 @@ async function translateMd(md) {
   }
   if (cur) chunks.push(cur);
   const out = [];
-  for (const c of chunks) out.push(c.trim() ? await gtx(c) : c);
+  for (const c of chunks) out.push(c.trim() ? await tr(env, c) : c);
   return out.join('\n').replace(/\s*ZQ\s*(\d+)\s*ZQ\s*/g, (_, i) => keep[Number(i)] ?? '');
 }
 
@@ -60,12 +87,14 @@ async function handleTranslate(env, token, gid) {
     const it = (await r.json()).appnews.newsitems.find((x) => String(x.gid) === gid);
     if (!it) return followup(env, token, { content: 'Не знайшов цей пост у Steam (він міг зникнути зі стрічки).' }, true);
     const md = localizeTimes(bbToMd(it.contents), it.date);
-    const [title, body] = [await gtx(it.title), await translateMd(md)];
+    useAi = false;
+    const title = await tr(env, it.title);
+    const body = await translateMd(env, md);
     const link = `https://store.steampowered.com/news/app/${APP_ID_STEAM}/view/${it.gid}`;
     const text = cut(body, 3900);
     await followup(env, token, { embeds: [{ color: 0x3498db, title: `🇺🇦 ${title}`.slice(0, 250), url: link, description: text + '\n\n*Машинний переклад — за точністю дивись оригінал.*' }] }, true);
   } catch (e) {
-    console.log('translate error', e);
+    console.log('translate error:', String(e && e.message || e));
     await followup(env, token, { content: 'Не вдалося перекласти зараз. Спробуй ще раз трохи пізніше.' }, true);
   }
 }
