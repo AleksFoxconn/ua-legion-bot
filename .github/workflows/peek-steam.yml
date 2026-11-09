@@ -1,9 +1,0 @@
-name: Peek steam
-on: workflow_dispatch
-jobs:
-  run:
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          curl -s "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=3393110&count=8&maxlength=0&format=json" | node -e '
-          let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for(const i of JSON.parse(s).appnews.newsitems.slice(0,6)){console.log("=====",i.title,"|",i.feedname,"|",new Date(i.date*1000).toISOString());console.log(i.contents.slice(0,1800))}})'

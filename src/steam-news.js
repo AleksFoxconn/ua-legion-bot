@@ -11,6 +11,7 @@ const DRY = env.DRY_RUN === '1';
 const STATE_FILE = env.STATE_FILE || '.cache/steam/state.json';
 const MAX_AGE_H = Number(env.UPDATES_MAX_AGE_H || 48); // нові пости старші за це не публікуємо
 const MAX_POSTS = 5;
+const FMT_V = 2; // версія оформлення постів (2 = час у місцевому поясі читача)
 const URL_API = `https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${APP_ID}&count=40&maxlength=0&format=json`;
 
 // ---------- Steam BBCode → Discord Markdown ----------
@@ -34,6 +35,50 @@ export function bbToMd(src) {
     .filter((l, i, a) => !(l.trim() === '' && a[i - 1]?.trim() === ''))
     .join('\n');
   return s.trim();
+}
+
+
+// ---------- час → <t:...> (Discord показує кожному у його часовому поясі) ----------
+const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+const TZ_OFF = { PST: -8, PDT: -7, UTC: 0, GMT: 0, CET: 1, CEST: 2, KST: 9 };
+const TZ = 'PST|PDT|UTC|GMT|CET|CEST|KST';
+const D = '([A-Z][a-z]{2,8})\\.?\\s+(\\d{1,2})(?:,\\s*(\\d{4}))?';
+function toTs(mon, day, year, hm, tz, postSec) {
+  const m = MONTHS[mon.slice(0, 3).toLowerCase()];
+  if (m === undefined || !(tz in TZ_OFF)) return null;
+  const [h, mi] = hm.split(':').map(Number);
+  const post = new Date(postSec * 1000);
+  let y = year ? Number(year) : post.getUTCFullYear();
+  const mk = (yy) => Date.UTC(yy, m, Number(day), h, mi) / 1000 - TZ_OFF[tz] * 3600;
+  let t = mk(y);
+  if (!year && t < postSec - 150 * 86400) t = mk(y + 1); // дата без року, що вже «в минулому» → наступний рік
+  return t;
+}
+const fmt = (t) => `<t:${t}:F>`;
+export function localizeTimes(text, postSec) {
+  const lines = String(text).split('\n');
+  const out = [];
+  let skipTz = false;
+  for (const line of lines) {
+    if (skipTz && new RegExp(`^\\s*(?:■\\s*)?(?:${TZ}):\\s*[A-Z]`).test(line)) continue; // дублікат в іншому поясі
+    // діапазон: "PST: November 4, 2026 at 06:00 - November 17, 2026 at 23:59"
+    const rg = line.match(new RegExp(`^(\\s*(?:■\\s*)?)(${TZ}):\\s*${D}\\s+at\\s+(\\d{1,2}:\\d{2})\\s*[-–]\\s*${D.replace(/\(\[A-Z\]/, '([A-Z]')}\\s+at\\s+(\\d{1,2}:\\d{2})\\s*$`));
+    if (rg) {
+      const [, pre, tz, m1, d1, y1, h1, m2, d2, y2, h2] = rg;
+      const a = toTs(m1, d1, y1, h1, tz, postSec);
+      const b = toTs(m2, d2, y2 || y1, h2, tz, postSec);
+      if (a && b) { out.push(`${pre}${fmt(a)} – ${fmt(b)}`); skipTz = true; continue; }
+    }
+    skipTz = false;
+    // одиночний час: "November 10, from 12:00 PST / 20:00 CET", "Nov 4, 00:00 PST / 09:00 CET"
+    const rest = `(?:\\s*\\/\\s*(?:[A-Z][a-z]{2,8}\\.?\\s+\\d{1,2}(?:,\\s*\\d{4})?(?:,|\\s+at)?\\s*)?\\d{1,2}:\\d{2}\\s*(?:${TZ}))*`;
+    const re = new RegExp(`${D}(?:,|\\s+at)?\\s*(?:from\\s+)?(\\d{1,2}:\\d{2})\\s*(${TZ})${rest}`, 'g');
+    out.push(line.replace(re, (all, mon, day, year, hm, tz) => {
+      const t = toTs(mon, day, year, hm, tz, postSec);
+      return t ? `${fmt(t)} (<t:${t}:R>)` : all;
+    }));
+  }
+  return out.join('\n');
 }
 
 const cut = (s, n) => {
@@ -65,7 +110,7 @@ export function buildEmbed(it, kind) {
     color = done ? 0x2ecc71 : 0xe67e22;
   }
   const link = `https://store.steampowered.com/news/app/${APP_ID}/view/${it.gid}`;
-  const body = cut(bbToMd(it.contents), 3400);
+  const body = cut(localizeTimes(bbToMd(it.contents), ts), 3400);
   return {
     color,
     title: (kind === 'patch' ? '📝 ' : '🛠 ') + String(it.title || '').slice(0, 240),
@@ -138,13 +183,18 @@ async function main() {
       if (nowS - it.date > MAX_AGE_H * 3600) { st.seen[it.gid] = { done }; continue; }
       if (posts >= MAX_POSTS) continue;
       const mid = await send(url, buildEmbed(it, kind));
-      st.seen[it.gid] = { mid, done };
+      st.seen[it.gid] = { mid, done, v: FMT_V };
       posts++;
       console.log('Опубліковано:', it.title);
     } else if (kind === 'maintenance' && rec.done !== done) {
       const mid = await send(url, buildEmbed(it, kind), rec.mid);
-      st.seen[it.gid] = { mid, done };
+      st.seen[it.gid] = { mid, done, v: FMT_V };
       console.log('Оновлено статус робіт:', it.title);
+    } else if (rec.mid && rec.v !== FMT_V && nowS - it.date <= MAX_AGE_H * 3600) {
+      // новий формат оформлення (місцевий час) → оновлюємо свіжі вже надіслані пости
+      const mid = await send(url, buildEmbed(it, kind), rec.mid);
+      st.seen[it.gid] = { ...rec, mid, v: FMT_V };
+      console.log('Переоформлено:', it.title);
     }
   }
   saveState(st);
