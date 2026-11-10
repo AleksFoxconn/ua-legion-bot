@@ -1,0 +1,14 @@
+name: Revert guide perms
+on: workflow_dispatch
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node src/revert-guide-perms.js
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          GUILD_ID: ${{ vars.GUILD_ID }}
