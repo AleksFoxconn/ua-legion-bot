@@ -6,9 +6,9 @@ const call = async (m, p, b) => { const r = await fetch(API + p, { method: m, he
 const roles = await call('GET', `/guilds/${guild}/roles`);
 const soldier = roles.find((r) => r.name === 'Soldier').id;
 const chans = await call('GET', `/guilds/${guild}/channels`);
-const ch = chans.find((c) => c.type === 0 && c.name.includes('гайд'));
+const ch = chans.find((c) => c.name.includes('гайд'));
 if (!ch) throw new Error('Канал не знайдено; наявні: ' + chans.map((c) => c.name).join(', '));
-console.log('канал:', ch.name, ch.id);
+console.log('канал:', ch.name, ch.id, 'type', ch.type);
 const B = (n) => 1n << BigInt(n);
 const allow = B(10) | B(16);                                  // перегляд + історія
 const deny = B(11) | B(6) | B(35) | B(36) | B(38);            // писати, реакції, гілки
