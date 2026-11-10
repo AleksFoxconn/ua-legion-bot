@@ -12,3 +12,5 @@ const log = await call('GET', `/guilds/${guild}/audit-logs?limit=50`);
 const ent = Array.isArray(log.audit_log_entries) ? log.audit_log_entries.filter((e) => e.target_id === ch.id || (e.options && e.options.channel_id === ch.id)) : [];
 console.log('записів аудиту про канал:', ent.length);
 for (const e of ent.slice(0, 8)) console.log(e.action_type, JSON.stringify(e.options), JSON.stringify(e.changes));
+// прибираємо дозвіл Soldier, який додав я (read-only)
+await call('DELETE', `/channels/${ch.id}/permissions/${soldier}`);
