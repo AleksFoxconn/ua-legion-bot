@@ -5,8 +5,12 @@ const H = { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' };
 const call = async (m, p, b) => { const r = await fetch(API + p, { method: m, headers: H, body: b && JSON.stringify(b) }); const t = await r.text(); console.log('API', m, p.replace(/\d{10,}/g, (x) => '…' + x.slice(-4)), r.status, r.ok ? '' : t.slice(0, 200)); try { return JSON.parse(t); } catch { return t; } };
 const roles = await call('GET', `/guilds/${guild}/roles`);
 console.log('API ролі:', roles.map((r) => r.name).join(' | '));
-const db = roles.find((r) => /aion 2 database/i.test(r.name));
-if (!db) throw new Error('Бот ще не доданий (ролі Aion 2 Database немає)');
+const BOT_ID = '1518983948167020584';
+const dbRole = roles.find((r) => /aion 2 database/i.test(r.name));
+const mr = await fetch(`https://discord.com/api/v10/guilds/${guild}/members/${BOT_ID}`, { headers: { Authorization: `Bot ${token}` } });
+console.log('API member lookup', mr.status);
+if (!dbRole && !mr.ok) throw new Error('Бот ще не доданий (ні ролі, ні учасника Aion 2 Database)');
+const db = dbRole ? { id: dbRole.id, type: 0 } : { id: BOT_ID, type: 1 };
 const soldier = roles.find((r) => r.name === 'Soldier').id;
 const timer = roles.find((r) => r.name === 'UA Legion Timer').id;
 const chans = await call('GET', `/guilds/${guild}/channels`);
@@ -17,7 +21,7 @@ const ow = [
   { id: guild, type: 0, allow: '0', deny: String(VIEW) },
   { id: soldier, type: 0, allow: String(VIEW | SEND | HIST | APPCMD | EMBED | REACT), deny: '0' },
   { id: timer, type: 0, allow: String(VIEW), deny: '0' },
-  { id: db.id, type: 0, allow: String(botAllow), deny: '0' },
+  { id: db.id, type: db.type, allow: String(botAllow), deny: '0' },
 ];
 let ch = chans.find((c) => c.name === 'довідник');
 if (!ch) {
