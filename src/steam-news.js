@@ -113,8 +113,13 @@ async function main() {
   let data;
   if (env.STEAM_NEWS_FILE) data = JSON.parse(fs.readFileSync(env.STEAM_NEWS_FILE, 'utf8'));
   else {
-    const r = await fetch(URL_API, { headers: { 'User-Agent': 'ua-legion-updates (low-frequency)' } });
-    if (!r.ok) throw new Error(`Steam news: ${r.status}`);
+    // Steam інколи не відповідає (Connect Timeout): пробуємо тричі, а якщо не вийшло, тихо пропускаємо цей запуск.
+    let r;
+    for (let i = 0; i < 3 && !(r && r.ok); i++) {
+      try { r = await fetch(URL_API, { headers: { 'User-Agent': 'ua-legion-updates (low-frequency)' }, signal: AbortSignal.timeout(15000) }); } catch (e) { console.log(`Steam news: спроба ${i + 1} невдала (${e.cause?.code || e.message})`); }
+      if (!(r && r.ok) && i < 2) await new Promise((res) => setTimeout(res, 3000));
+    }
+    if (!r || !r.ok) return console.log('Steam недоступний, оновлення пропущено до наступного запуску');
     data = await r.json();
   }
   const items = (data.appnews?.newsitems || [])
